@@ -1,0 +1,20 @@
+[package]
+name = "mpvpaper-rs-holder"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Lightweight holder process for mpvpaper-rs"
+
+[[bin]]
+name = "mpvpaper-rs-holder"
+path = "src/main.rs"
+
+[dependencies]
+mpvpaper-rs-core.workspace = true
+wayland-client.workspace = true
+wayland-protocols-wlr.workspace = true
+smithay-client-toolkit.workspace = true
+nix.workspace = true
+anyhow.workspace = true
+clap.workspace = true

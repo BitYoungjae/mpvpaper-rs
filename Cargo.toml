@@ -1,0 +1,55 @@
+[workspace]
+members = ["crates/mpvpaper-rs", "crates/holder", "crates/core"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["bityoungjae"]
+license = "GPL-3.0"
+repository = "https://github.com/bityoungjae/mpvpaper-rs"
+description = "Video wallpaper player using mpv for wlroots-based Wayland compositors"
+
+[workspace.dependencies]
+# Internal crates
+mpvpaper-rs-core = { path = "crates/core" }
+
+# Wayland - SCTK 0.20 기반 최신 조합
+smithay-client-toolkit = { version = "0.20", default-features = false, features = ["calloop"] }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32.10", features = ["client"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+wayland-egl = "0.32.9"
+
+# Event loop
+calloop = "0.14"
+# calloop-wayland-source 0.4는 calloop 0.14와 호환
+# 0.3은 calloop 0.13 기반이므로 0.4 사용
+calloop-wayland-source = "0.4"
+
+# Graphics
+khronos-egl = { version = "6", features = ["dynamic"] }
+gl = "0.14"
+libloading = "0.8"
+
+# MPV
+libmpv2 = "5.0.3"
+libmpv2-sys = "4"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+dirs = "6"
+shlex = "1"
+
+# Threading
+nix = { version = "0.31.1", features = ["event", "poll", "signal", "process", "mman", "fs"] }
+dashmap = "6.1"
+
+# Logging
+colored = "2"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+ctrlc = "3"
+signal-hook = { version = "0.3", features = ["iterator"] }

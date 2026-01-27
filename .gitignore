@@ -1,0 +1,23 @@
+# prompts.md and task.md - working files
+prompts.md
+task.md
+
+
+# Editor and IDE files
+.vscode/
+.idea/
+.claude/settings.local.json
+*.swp
+*.swo
+*~
+
+# Build artifacts
+/target/
+
+# Debug and log files
+*.debug
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

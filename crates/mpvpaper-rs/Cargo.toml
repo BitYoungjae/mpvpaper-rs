@@ -1,0 +1,22 @@
+[package]
+name = "mpvpaper-rs"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Video wallpaper player using mpv for wlroots-based Wayland compositors"
+
+[[bin]]
+name = "mpvpaper-rs"
+path = "src/main.rs"
+
+[dependencies]
+mpvpaper-rs-core.workspace = true
+clap.workspace = true
+calloop.workspace = true
+calloop-wayland-source.workspace = true
+wayland-client.workspace = true
+smithay-client-toolkit.workspace = true
+ctrlc.workspace = true
+signal-hook.workspace = true
+nix.workspace = true
