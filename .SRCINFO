@@ -17,6 +17,6 @@ pkgbase = mpvpaper-rs
 	provides = mpvpaper-rs-holder
 	conflicts = mpvpaper
 	source = mpvpaper-rs-0.1.0.tar.gz::https://github.com/bityoungjae/mpvpaper-rs/archive/refs/tags/v0.1.0.tar.gz
-	sha256sums = SKIP
+	sha256sums = 1f465bfa9f8036444c49d03a05dcffa711b5b35702eb694acdf4afb227cf343c
 
 pkgname = mpvpaper-rs

@@ -11,7 +11,7 @@ makedepends=('cargo' 'pkg-config')
 provides=('mpvpaper-rs' 'mpvpaper-rs-holder')
 conflicts=('mpvpaper')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('1f465bfa9f8036444c49d03a05dcffa711b5b35702eb694acdf4afb227cf343c')
 
 prepare() {
     cd "$pkgname-$pkgver"
