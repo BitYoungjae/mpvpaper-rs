@@ -39,33 +39,32 @@ sudo dnf install mpv-devel mesa-libEGL-devel wayland-devel
 
 ## Installation
 
-### Method 1: Install from local repository (Recommended)
+### Arch Linux (AUR)
+
+```bash
+# Using yay
+yay -S mpvpaper-rs
+
+# Using paru
+paru -S mpvpaper-rs
+```
+
+### From source
 
 ```bash
 # Clone the repository
 git clone https://github.com/BitYoungjae/mpvpaper-rs.git
 cd mpvpaper-rs
 
-# Install directly to ~/.cargo/bin/
-cargo install --path crates/mpvpaper-rs
-```
-
-### Method 2: Build manually
-
-```bash
-# Build release binaries
+# Build and install
 cargo build --release
-
-# (Optional) Install to system
 sudo install -m 755 target/release/mpvpaper-rs /usr/local/bin/
 sudo install -m 755 target/release/mpvpaper-rs-holder /usr/local/bin/
 ```
 
-After installation, binaries will be available:
+After installation, two binaries will be available:
 - `mpvpaper-rs` - Main application
 - `mpvpaper-rs-holder` - Helper for auto-stop recovery
-
-**Note:** Make sure `~/.cargo/bin` is in your `PATH` (it usually is if you use Rust).
 
 ## Usage
 
@@ -197,11 +196,11 @@ Create `~/.config/systemd/user/mpvpaper.service`:
 Description=Motion wallpaper with mpvpaper-rs
 After=graphical-session.target
 PartOf=graphical-session.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/mpvpaper-rs -p -o="--no-audio --loop --gpu-api=vulkan --panscan=1" ALL %h/Backgrounds/Motions/current.mp4
-# Optional: Kill static wallpaper (swaybg) before starting. Remove if not using swaybg.
+ExecStart=/usr/bin/mpvpaper-rs -p -o="--no-audio --loop --gpu-api=vulkan --panscan=1" ALL %h/Backgrounds/Motions/current.mp4
 ExecStartPre=-/bin/bash -c 'pkill -f swaybg || true'
 Restart=on-failure
 RestartSec=2
@@ -217,19 +216,36 @@ systemctl --user enable --now mpvpaper.service
 
 ### Auto-Rotate Timer
 
-Create `~/.config/systemd/user/mpvpaper-rotate.timer` to change wallpaper every 10 minutes:
+Create `~/.config/systemd/user/mpvpaper-rotate.timer`:
 
 ```ini
 [Unit]
-Description=Timer to rotate motion wallpaper every 10 minutes
+Description=Timer to rotate motion wallpaper every 30 minutes
 
 [Timer]
 OnBootSec=0sec
-OnUnitActiveSec=10min
+OnUnitActiveSec=30min
 AccuracySec=1s
 
 [Install]
 WantedBy=timers.target
+```
+
+Create `~/.config/systemd/user/mpvpaper-rotate.service`:
+
+```ini
+[Unit]
+Description=Rotate motion wallpaper
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c '~/.local/bin/mpvpaper-switch'
+```
+
+Enable with:
+```bash
+systemctl --user enable --now mpvpaper-rotate.timer
 ```
 
 ### Hyprland Keybinding
@@ -237,7 +253,7 @@ WantedBy=timers.target
 Add to your Hyprland config to switch wallpapers with `SUPER + CTRL + SPACE`:
 
 ```conf
-bindd = SUPER CTRL, SPACE, Next motion wallpaper, exec, ~/.local/bin/mpvpaper-switch && systemctl --user restart mpvpaper.service
+bindd = SUPER CTRL, SPACE, Next motion wallpaper, exec, ~/.local/bin/mpvpaper-switch
 ```
 
 ### Video Switcher Script
@@ -246,29 +262,54 @@ Create `~/.local/bin/mpvpaper-switch` to cycle through videos:
 
 ```bash
 #!/bin/bash
+# Usage: mpvpaper-switch [video-name]
+#   No argument: cycle to next video
+#   With argument: switch to specific video (extension not required)
+
 MOTIONS_DIR="$HOME/Backgrounds/Motions"
 CURRENT_LINK="$MOTIONS_DIR/current.mp4"
 
-# Find videos (excluding current.mp4 symlink)
 mapfile -t VIDEOS < <(find "$MOTIONS_DIR" -maxdepth 1 -type f \( -name "*.mp4" -o -name "*.webm" -o -name "*.mkv" \) ! -name "current.mp4" | sort)
 
-# Get current video index
-CURRENT_VIDEO=$(readlink -f "$CURRENT_LINK" 2>/dev/null)
-CURRENT_INDEX=-1
-for i in "${!VIDEOS[@]}"; do
-    [[ "${VIDEOS[$i]}" == "$CURRENT_VIDEO" ]] && CURRENT_INDEX=$i && break
-done
+if [[ ${#VIDEOS[@]} -eq 0 ]]; then
+    echo "No videos found in $MOTIONS_DIR"
+    exit 1
+fi
 
-# Select next video (circular)
-NEXT_INDEX=$(( (CURRENT_INDEX + 1) % ${#VIDEOS[@]} ))
-SELECTED="${VIDEOS[$NEXT_INDEX]}"
+if [[ -z "$1" ]]; then
+    # Cycle to next video
+    CURRENT_VIDEO=""
+    [[ -L "$CURRENT_LINK" ]] && CURRENT_VIDEO=$(readlink -f "$CURRENT_LINK")
 
-# Update symlink
+    CURRENT_INDEX=-1
+    for i in "${!VIDEOS[@]}"; do
+        [[ "${VIDEOS[$i]}" == "$CURRENT_VIDEO" ]] && CURRENT_INDEX=$i && break
+    done
+
+    NEXT_INDEX=$(( (CURRENT_INDEX + 1) % ${#VIDEOS[@]} ))
+    SELECTED="${VIDEOS[$NEXT_INDEX]}"
+else
+    # Find by name
+    SELECTED=""
+    for video in "${VIDEOS[@]}"; do
+        name="${video%.*}"
+        name="${name##*/}"
+        [[ "$name" == "$1" ]] && SELECTED="$video" && break
+    done
+
+    if [[ -z "$SELECTED" ]]; then
+        echo "Video not found: $1"
+        echo "Available: $(printf '%s ' "${VIDEOS[@]##*/}" | sed 's/\.[^.]*//g')"
+        exit 1
+    fi
+fi
+
 ln -nsf "$SELECTED" "$CURRENT_LINK"
 
-# Notify
 BASENAME=$(basename "$SELECTED")
 notify-send "Background switched" "${BASENAME%.*}" -t 1500
+
+systemctl --user restart mpvpaper.service
 ```
 
 Make executable: `chmod +x ~/.local/bin/mpvpaper-switch`
