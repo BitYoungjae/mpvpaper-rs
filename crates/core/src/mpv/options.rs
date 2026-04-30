@@ -164,6 +164,23 @@ pub fn apply_slideshow_options(mpv: &Mpv) -> Result<()> {
     Ok(())
 }
 
+/// Apply wallpaper-friendly defaults.
+///
+/// Sets `audio=no` and `hwdec=auto-safe` to keep CPU usage low for typical
+/// wallpaper usage. User `-o` options applied AFTER this still override these
+/// (apply order is: defaults -> user runtime properties).
+///
+/// Errors are intentionally ignored:
+/// - mpv versions older than 0.32 don't recognize `auto-safe` (we fall back to `auto`).
+/// - In the unlikely case `audio` cannot be set, the worst outcome is audio plays;
+///   not worth aborting startup.
+pub fn apply_wallpaper_defaults(mpv: &Mpv) {
+    let _ = mpv.set_property("audio", "no");
+    if mpv.set_property("hwdec", "auto-safe").is_err() {
+        let _ = mpv.set_property("hwdec", "auto");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -22,6 +22,15 @@ pub struct EglState {
     pub api_type: GlApiType,
 }
 
+// SAFETY: EglState is only accessed from the main render thread (where the
+// EGL context is made current). Worker threads receive `Arc<EglState>`
+// transitively (via captured closures in MpvState) but never invoke EglState
+// methods or dereference its fields. khronos_egl wraps EGL handles in raw
+// pointers which make the type !Send/!Sync by default; declaring them safe
+// here reflects our actual single-threaded usage discipline.
+unsafe impl Send for EglState {}
+unsafe impl Sync for EglState {}
+
 impl EglState {
     /// Create EGL display from Wayland Connection
     ///

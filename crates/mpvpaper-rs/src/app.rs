@@ -75,7 +75,7 @@ pub fn run_app(args: &Args) -> Result<()> {
     let mpv_state = Arc::new(MpvState::new(
         wl_display,
         render_wakeup_tx,
-        true, // load config
+        !args.no_mpv_config,
         &parsed_mpv_options,
     )?);
     let mut mpv_state = mpv_state;
@@ -267,6 +267,12 @@ fn exec_holder(args: &Args, save_info: Option<&str>) -> Result<()> {
     c_args.push(CString::new("-l").unwrap());
     c_args.push(CString::new(layer_str).unwrap());
 
+    // Preserve --no-mpv-config across the main → holder transition so the
+    // value is round-tripped if/when holder revives mpvpaper-rs.
+    if args.no_mpv_config {
+        c_args.push(CString::new("--no-mpv-config").unwrap());
+    }
+
     // MPV options
     if let Some(ref opts) = args.mpv_options {
         c_args.push(CString::new("-o").unwrap());
@@ -410,10 +416,16 @@ fn main_loop(
         })
         .map_err(|e| AppError::Config(format!("Failed to insert signal channel: {}", e)))?;
 
-    // Main loop with 16ms timeout (~60 FPS)
+    // Main loop. The dispatch timeout only governs how often we re-check
+    // `stop_render_loop` (set by auto_stop / stoplist worker threads). All
+    // active event sources — Wayland fd, render wakeup channel, signal channel —
+    // wake the dispatch immediately on activity, so a long timeout doesn't
+    // affect rendering responsiveness. SIGINT/SIGTERM go through signal_rx
+    // which wakes dispatch instantly; only auto_stop transition latency is
+    // bounded by this timeout (1s is acceptable for a holder switch).
     while !halt_info.stop_render_loop.load(Ordering::SeqCst) {
         event_loop
-            .dispatch(Duration::from_millis(16), &mut app_state)
+            .dispatch(Duration::from_secs(1), &mut app_state)
             .map_err(|e| AppError::Config(format!("Event loop dispatch error: {}", e)))?;
     }
 

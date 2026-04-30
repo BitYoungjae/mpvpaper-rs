@@ -44,6 +44,14 @@ pub struct Args {
     #[arg(short = 'o', long = "mpv-options")]
     pub mpv_options: Option<String>,
 
+    /// Do not load user mpv.conf (~/.config/mpv/mpv.conf)
+    ///
+    /// Skips loading the user's mpv configuration file. Recommended when mpv.conf
+    /// contains options tuned for normal video viewing (high-quality scalers,
+    /// interpolation, deband, etc.) that are too expensive for wallpaper use.
+    #[arg(long = "no-mpv-config")]
+    pub no_mpv_config: bool,
+
     /// Hidden: restore video position (used internally by holder)
     #[arg(short = 'Z', hide = true)]
     pub restore_info: Option<String>,
@@ -103,6 +111,7 @@ mod tests {
             slideshow: None,
             layer: LayerArg::Background,
             mpv_options: None,
+            no_mpv_config: false,
             restore_info: None,
             output: None,
             video_path: Some("/path/to/video.mp4".to_string()),
@@ -121,6 +130,7 @@ mod tests {
             slideshow: None,
             layer: LayerArg::Background,
             mpv_options: None,
+            no_mpv_config: false,
             restore_info: None,
             output: Some("DP-2".to_string()),
             video_path: None,
@@ -139,6 +149,7 @@ mod tests {
             slideshow: None,
             layer: LayerArg::Background,
             mpv_options: Some("--playlist=/path/to/playlist.txt".to_string()),
+            no_mpv_config: false,
             restore_info: None,
             output: Some("DP-2".to_string()),
             video_path: None,

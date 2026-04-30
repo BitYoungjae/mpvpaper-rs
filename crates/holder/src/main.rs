@@ -502,6 +502,12 @@ fn revive_mpvpaper_rs(args: &Args) -> Result<()> {
     c_args.push(CString::new("-l").unwrap());
     c_args.push(CString::new(layer_str).unwrap());
 
+    // Preserve --no-mpv-config so the revived mpvpaper-rs has the same
+    // config-loading behavior as the original invocation.
+    if args.no_mpv_config {
+        c_args.push(CString::new("--no-mpv-config").unwrap());
+    }
+
     // MPV options
     if let Some(ref opts) = args.mpv_options {
         c_args.push(CString::new("-o").unwrap());

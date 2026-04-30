@@ -131,7 +131,10 @@ impl ThreadHandles {
 /// Handles:
 /// - Slideshow timer (time-based, drift-resistant)
 /// - User pause tracking (by polling mpv pause state)
-/// - Auto-unpause when is_paused == 0 && !user_paused
+///
+/// Auto-unpause is NOT done here. It is performed at the sites that decrement
+/// `is_paused` (auto_pause_handler and pauselist_monitor_handler) so this thread
+/// only needs to wake infrequently.
 fn mpv_event_handler(
     halt_info: Arc<HaltInfo>,
     mpv: Arc<MpvState>,
@@ -167,17 +170,7 @@ fn mpv_event_handler(
             last_mpv_paused = current_mpv_paused;
         }
 
-        // Auto-unpause logic (respects user manual pause)
-        if halt_info.is_paused.load(Ordering::SeqCst) == 0
-            && !halt_info.user_paused.load(Ordering::SeqCst)
-        {
-            // Only unpause if not already playing
-            if mpv.is_paused() {
-                let _ = mpv.unpause();
-            }
-        }
-
-        thread::sleep(Duration::from_millis(20));
+        thread::sleep(Duration::from_millis(250));
     }
 }
 
@@ -215,7 +208,16 @@ fn auto_pause_handler(halt_info: Arc<HaltInfo>, mpv: Arc<MpvState>) {
                 thread::sleep(Duration::from_millis(100));
             }
 
-            halt_info.is_paused.fetch_sub(1, Ordering::SeqCst);
+            // Decrement and unpause directly when we own the last hold and the
+            // user hasn't manually paused. fetch_sub returns the prior value:
+            // only the thread that observes prev == 1 is responsible for unpausing.
+            let prev = halt_info.is_paused.fetch_sub(1, Ordering::SeqCst);
+            if prev == 1
+                && !halt_info.user_paused.load(Ordering::SeqCst)
+                && mpv.is_paused()
+            {
+                let _ = mpv.unpause();
+            }
         }
     }
 }
@@ -274,7 +276,15 @@ fn pauselist_monitor_handler(halt_info: Arc<HaltInfo>, mpv: Arc<MpvState>, verbo
             }
         } else if halt_info.list_paused.load(Ordering::SeqCst) {
             halt_info.list_paused.store(false, Ordering::SeqCst);
-            halt_info.is_paused.fetch_sub(1, Ordering::SeqCst);
+            // Decrement and unpause directly when we own the last hold and the
+            // user hasn't manually paused. Mirror auto_pause_handler.
+            let prev = halt_info.is_paused.fetch_sub(1, Ordering::SeqCst);
+            if prev == 1
+                && !halt_info.user_paused.load(Ordering::SeqCst)
+                && mpv.is_paused()
+            {
+                let _ = mpv.unpause();
+            }
         }
 
         thread::sleep(Duration::from_secs(1));

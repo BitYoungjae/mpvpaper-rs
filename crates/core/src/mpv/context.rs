@@ -18,7 +18,12 @@ use libmpv2_sys::{
 use crate::error::{AppError, Result};
 use crate::logging::cflp_success;
 
-use super::options::{apply_init_options, apply_runtime_properties, ParsedMpvOptions};
+use super::options::{
+    apply_init_options, apply_runtime_properties, apply_wallpaper_defaults, ParsedMpvOptions,
+};
+
+/// Closure resolving an OpenGL function name to its address.
+type GetProcAddrFn = dyn Fn(&CStr) -> *mut c_void;
 
 /// MPV state with render context for OpenGL rendering
 ///
@@ -32,7 +37,7 @@ pub struct MpvState {
     /// Last update flags from mpv_render_context_update
     pub last_update_flags: AtomicU64,
     /// Box holding the get_proc_addr closure - must outlive render_ctx
-    _get_proc_addr_box: Option<Box<dyn Fn(&CStr) -> *mut c_void>>,
+    _get_proc_addr_box: Option<Box<GetProcAddrFn>>,
     /// Stored data for deferred render context creation
     init_data: Mutex<Option<MpvInitData>>,
     /// Raw pointer to the Sender leaked for mpv callback - must be freed in Drop
@@ -104,9 +109,14 @@ impl MpvState {
 
             Ok(())
         })
-        .map_err(|e| AppError::Mpv(e))?;
+        .map_err(AppError::Mpv)?;
 
-        // Apply runtime properties
+        // Apply wallpaper-friendly defaults BEFORE user runtime options so
+        // user `-o` options can still override them.
+        // CPU-relevant defaults: audio=no, hwdec=auto-safe.
+        apply_wallpaper_defaults(&mpv);
+
+        // Apply runtime properties (user -o options)
         apply_runtime_properties(&mpv, &parsed_options.runtime_properties)?;
 
         cflp_success("MPV handle created");
@@ -149,7 +159,7 @@ impl MpvState {
             .ok_or_else(|| AppError::Config("Missing init data for render context".into()))?;
 
         // Box the get_proc_addr closure so it lives as long as MpvState
-        let get_proc_addr_box: Box<dyn Fn(&CStr) -> *mut c_void> = Box::new(get_proc_addr);
+        let get_proc_addr_box: Box<GetProcAddrFn> = Box::new(get_proc_addr);
 
         // Create render context
         let render_ctx = create_render_context(
@@ -174,7 +184,7 @@ impl MpvState {
     pub fn load_file(&self, path: &str) -> Result<()> {
         self.mpv
             .command("loadfile", &[path])
-            .map_err(|e| AppError::Mpv(e))?;
+            .map_err(AppError::Mpv)?;
         cflp_success(&format!("Loaded: {}", path));
         Ok(())
     }
@@ -187,17 +197,17 @@ impl MpvState {
             if let Ok(pos) = playlist_pos.parse::<i64>() {
                 self.mpv
                     .set_property("playlist-pos", pos)
-                    .map_err(|e| AppError::Mpv(e))?;
+                    .map_err(AppError::Mpv)?;
             }
             if let Ok(time) = time_pos.parse::<f64>() {
                 self.mpv
                     .set_property("time-pos", time)
-                    .map_err(|e| AppError::Mpv(e))?;
+                    .map_err(AppError::Mpv)?;
             }
         } else if let Ok(time) = save_info.parse::<f64>() {
             self.mpv
                 .set_property("time-pos", time)
-                .map_err(|e| AppError::Mpv(e))?;
+                .map_err(AppError::Mpv)?;
         }
         Ok(())
     }
@@ -226,7 +236,7 @@ impl MpvState {
     pub fn set_pause(&self, paused: bool) -> Result<()> {
         self.mpv
             .set_property("pause", paused)
-            .map_err(|e| AppError::Mpv(e))
+            .map_err(AppError::Mpv)
     }
 
     /// Pause playback
@@ -243,7 +253,7 @@ impl MpvState {
     pub fn playlist_next(&self) -> Result<()> {
         self.mpv
             .command("playlist-next", &["weak"])
-            .map_err(|e| AppError::Mpv(e))
+            .map_err(AppError::Mpv)
     }
 
 }
@@ -283,7 +293,7 @@ unsafe extern "C" fn gl_get_proc_address_wrapper(
         return ptr::null_mut();
     }
 
-    let get_proc_addr = &*(ctx as *const Box<dyn Fn(&CStr) -> *mut c_void>);
+    let get_proc_addr = &*(ctx as *const Box<GetProcAddrFn>);
     let name_cstr = CStr::from_ptr(name);
     get_proc_addr(name_cstr)
 }
@@ -295,10 +305,16 @@ unsafe extern "C" fn gl_get_proc_address_wrapper(
 /// - Uses raw pointers for mpv_handle and wl_display
 /// - Calls FFI functions directly
 /// - The get_proc_addr closure must outlive the render context
+///
+/// `&Box<GetProcAddrFn>` is intentional (not `&GetProcAddrFn`): the FFI ctx
+/// must be a thin pointer to the Box itself so the wrapper can re-create the
+/// same `&Box<...>` reference on the C side. A `&dyn Fn` fat pointer cannot
+/// round-trip through `*mut c_void`.
+#[allow(clippy::borrowed_box)]
 unsafe fn create_render_context(
     mpv_handle: *mut libmpv2_sys::mpv_handle,
     wl_display: *mut c_void,
-    get_proc_addr: &Box<dyn Fn(&CStr) -> *mut c_void>,
+    get_proc_addr: &Box<GetProcAddrFn>,
 ) -> Result<*mut mpv_render_context> {
     // OpenGL init params
     let gl_init = mpv_opengl_init_params {
@@ -319,7 +335,7 @@ unsafe fn create_render_context(
     let params = [
         mpv_render_param {
             type_: mpv_render_param_type_MPV_RENDER_PARAM_API_TYPE,
-            data: b"opengl\0".as_ptr() as *mut c_void,
+            data: c"opengl".as_ptr() as *mut c_void,
         },
         mpv_render_param {
             type_: mpv_render_param_type_MPV_RENDER_PARAM_OPENGL_INIT_PARAMS,
