@@ -131,15 +131,29 @@ mpvpaper-rs -o="--loop --mute" DP-2 /path/to/video.mp4
 mpvpaper-rs --mpv-options="--loop --mute" DP-2 /path/to/video.mp4
 ```
 
+#### Wallpaper-friendly defaults
+
+To keep CPU usage low for typical wallpaper scenarios, mpvpaper-rs applies the
+following defaults before any user `-o` options:
+
+- `audio=no` — audio is disabled (override with `-o="--audio=yes"`)
+- `hwdec=auto-safe` — hardware decoding when available, software fallback
+  otherwise (override with `-o="--hwdec=no"` to force software decoding)
+
+Your user mpv config at `~/.config/mpv/mpv.conf` is loaded by default. If your
+mpv.conf is tuned for normal viewing (high-quality scalers, interpolation,
+deband, etc.) and causes high CPU as a wallpaper, pass `--no-mpv-config` to
+skip it.
+
 #### Useful MPV Options
 
 | Option | Description |
 |--------|-------------|
-| `--no-audio` | Disable audio playback |
+| `--audio=yes` | Re-enable audio (default off for wallpaper) |
+| `--hwdec=no` | Force software decoding |
 | `--loop` | Loop video infinitely |
 | `--gpu-api=vulkan` | Use Vulkan for rendering (better performance) |
 | `--panscan=1` | Auto-adjust aspect ratio to fill screen |
-| `--hwdec=auto` | Enable hardware decoding |
 
 **Production example:**
 ```bash
@@ -164,6 +178,7 @@ mpvpaper-rs -vv DP-2 /path/to/video.mp4  # More verbose
 | `-n, --slideshow <SEC>` | Slideshow interval in seconds |
 | `-l, --layer <LAYER>` | Layer: background, bottom, top, overlay |
 | `-o, --mpv-options <OPTS>` | Pass options to mpv |
+| `--no-mpv-config` | Do not load user `~/.config/mpv/mpv.conf` |
 | `-v, --verbose` | Increase verbosity (-v, -vv) |
 
 ### Output Selectors

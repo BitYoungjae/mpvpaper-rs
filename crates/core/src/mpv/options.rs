@@ -146,10 +146,7 @@ pub fn apply_init_options(
 pub fn apply_runtime_properties(mpv: &Mpv, properties: &[(String, String)]) -> Result<()> {
     for (key, value) in properties {
         mpv.set_property(key, value.clone()).map_err(|e| {
-            AppError::Config(format!(
-                "Failed to set property '{}={}': {}",
-                key, value, e
-            ))
+            AppError::Config(format!("Failed to set property '{}={}': {}", key, value, e))
         })?;
     }
     Ok(())
@@ -164,6 +161,23 @@ pub fn apply_slideshow_options(mpv: &Mpv) -> Result<()> {
     Ok(())
 }
 
+/// Apply wallpaper-friendly defaults.
+///
+/// Sets `audio=no` and `hwdec=auto-safe` to keep CPU usage low for typical
+/// wallpaper usage. User `-o` options applied AFTER this still override these
+/// (apply order is: defaults -> user runtime properties).
+///
+/// Errors are intentionally ignored:
+/// - mpv versions older than 0.32 don't recognize `auto-safe` (we fall back to `auto`).
+/// - In the unlikely case `audio` cannot be set, the worst outcome is audio plays;
+///   not worth aborting startup.
+pub fn apply_wallpaper_defaults(mpv: &Mpv) {
+    let _ = mpv.set_property("audio", "no");
+    if mpv.set_property("hwdec", "auto-safe").is_err() {
+        let _ = mpv.set_property("hwdec", "auto");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,28 +186,40 @@ mod tests {
     fn test_parse_standard_option() {
         let result = parse_user_options("--volume=50").unwrap();
         assert_eq!(result.runtime_properties.len(), 1);
-        assert_eq!(result.runtime_properties[0], ("volume".to_string(), "50".to_string()));
+        assert_eq!(
+            result.runtime_properties[0],
+            ("volume".to_string(), "50".to_string())
+        );
     }
 
     #[test]
     fn test_parse_no_prefix() {
         let result = parse_user_options("--no-audio").unwrap();
         assert_eq!(result.runtime_properties.len(), 1);
-        assert_eq!(result.runtime_properties[0], ("audio".to_string(), "no".to_string()));
+        assert_eq!(
+            result.runtime_properties[0],
+            ("audio".to_string(), "no".to_string())
+        );
     }
 
     #[test]
     fn test_parse_flag_option() {
         let result = parse_user_options("--pause").unwrap();
         assert_eq!(result.runtime_properties.len(), 1);
-        assert_eq!(result.runtime_properties[0], ("pause".to_string(), "yes".to_string()));
+        assert_eq!(
+            result.runtime_properties[0],
+            ("pause".to_string(), "yes".to_string())
+        );
     }
 
     #[test]
     fn test_parse_init_only_option() {
         let result = parse_user_options("--vo=libmpv").unwrap();
         assert_eq!(result.init_options.len(), 1);
-        assert_eq!(result.init_options[0], ("vo".to_string(), "libmpv".to_string()));
+        assert_eq!(
+            result.init_options[0],
+            ("vo".to_string(), "libmpv".to_string())
+        );
         assert!(result.runtime_properties.is_empty());
     }
 
@@ -208,7 +234,10 @@ mod tests {
     fn test_parse_quoted_value() {
         let result = parse_user_options("--title=\"My Video\"").unwrap();
         assert_eq!(result.runtime_properties.len(), 1);
-        assert_eq!(result.runtime_properties[0], ("title".to_string(), "My Video".to_string()));
+        assert_eq!(
+            result.runtime_properties[0],
+            ("title".to_string(), "My Video".to_string())
+        );
     }
 
     #[test]

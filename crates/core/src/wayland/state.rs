@@ -58,8 +58,8 @@ impl AppState {
         let output_state = OutputState::new(&globals, &qh);
 
         // Layer shell binding failure with clear error message
-        let layer_shell = LayerShell::bind(&globals, &qh)
-            .map_err(|_| AppError::LayerShellNotSupported)?;
+        let layer_shell =
+            LayerShell::bind(&globals, &qh).map_err(|_| AppError::LayerShellNotSupported)?;
 
         let mut state = Self {
             conn,
