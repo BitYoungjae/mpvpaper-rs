@@ -52,9 +52,10 @@ impl DisplayOutput {
     }
 
     pub fn setup_egl(&mut self, egl_state: &EglState, width: u32, height: u32) -> Result<()> {
-        let layer_surface = self.layer_surface.as_ref().ok_or_else(|| {
-            AppError::EglInit("Layer surface not available for EGL setup".into())
-        })?;
+        let layer_surface = self
+            .layer_surface
+            .as_ref()
+            .ok_or_else(|| AppError::EglInit("Layer surface not available for EGL setup".into()))?;
 
         self.egl_surface = None;
         self.egl_window = None;
@@ -63,8 +64,8 @@ impl DisplayOutput {
         // No need to scale again - the compositor has already accounted for scale
         let width_i32 =
             i32::try_from(width).map_err(|_| AppError::EglInit("Width too large".into()))?;
-        let height_i32 = i32::try_from(height)
-            .map_err(|_| AppError::EglInit("Height too large".into()))?;
+        let height_i32 =
+            i32::try_from(height).map_err(|_| AppError::EglInit("Height too large".into()))?;
 
         let wl_surface = layer_surface.wl_surface();
         let egl_window = WlEglSurface::new(wl_surface.id(), width_i32, height_i32)
@@ -178,7 +179,9 @@ impl OutputHandler for AppState {
         // CRITICAL: Remove output from OutputFrameState (required for auto_pause/auto_stop accuracy)
         // If not removed, non-existent output's frame_ready state remains and
         // all_hidden() determination becomes inaccurate
-        self.halt_info.output_frame_state.remove_output(&output.id());
+        self.halt_info
+            .output_frame_state
+            .remove_output(&output.id());
 
         self.outputs.remove(&output.id());
     }

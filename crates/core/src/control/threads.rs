@@ -212,10 +212,7 @@ fn auto_pause_handler(halt_info: Arc<HaltInfo>, mpv: Arc<MpvState>) {
             // user hasn't manually paused. fetch_sub returns the prior value:
             // only the thread that observes prev == 1 is responsible for unpausing.
             let prev = halt_info.is_paused.fetch_sub(1, Ordering::SeqCst);
-            if prev == 1
-                && !halt_info.user_paused.load(Ordering::SeqCst)
-                && mpv.is_paused()
-            {
+            if prev == 1 && !halt_info.user_paused.load(Ordering::SeqCst) && mpv.is_paused() {
                 let _ = mpv.unpause();
             }
         }
@@ -279,10 +276,7 @@ fn pauselist_monitor_handler(halt_info: Arc<HaltInfo>, mpv: Arc<MpvState>, verbo
             // Decrement and unpause directly when we own the last hold and the
             // user hasn't manually paused. Mirror auto_pause_handler.
             let prev = halt_info.is_paused.fetch_sub(1, Ordering::SeqCst);
-            if prev == 1
-                && !halt_info.user_paused.load(Ordering::SeqCst)
-                && mpv.is_paused()
-            {
+            if prev == 1 && !halt_info.user_paused.load(Ordering::SeqCst) && mpv.is_paused() {
                 let _ = mpv.unpause();
             }
         }

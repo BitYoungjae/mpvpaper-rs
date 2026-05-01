@@ -9,11 +9,11 @@ use std::os::unix::ffi::OsStrExt;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use clap::Parser;
 use mpvpaper_rs_core::cli::Args;
 use mpvpaper_rs_core::config::{get_stoplist_path, load_list_file};
 use mpvpaper_rs_core::logging::{cflp_error, cflp_info, cflp_success};
 use mpvpaper_rs_core::process::check_watch_list;
-use clap::Parser;
 use smithay_client_toolkit::compositor::{CompositorHandler, CompositorState};
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
 use smithay_client_toolkit::registry::{ProvidesRegistryState, RegistryState};
@@ -256,7 +256,10 @@ fn run() -> Result<()> {
     let outputs = select_outputs(&state.output_state, output_name)?;
 
     if outputs.is_empty() {
-        return Err(anyhow::anyhow!("No outputs matched selector: {}", output_name));
+        return Err(anyhow::anyhow!(
+            "No outputs matched selector: {}",
+            output_name
+        ));
     }
 
     cflp_info(
@@ -341,7 +344,11 @@ fn run() -> Result<()> {
     let stoplist = load_stoplist();
 
     // Main loop - check stoplist every second
-    cflp_info(1, args.verbose, "Entering main loop, monitoring stoplist...");
+    cflp_info(
+        1,
+        args.verbose,
+        "Entering main loop, monitoring stoplist...",
+    );
 
     loop {
         // Check if we should revive mpvpaper-rs
@@ -363,10 +370,7 @@ fn run() -> Result<()> {
 }
 
 /// Select outputs matching selector (ALL/* for all outputs)
-fn select_outputs(
-    output_state: &OutputState,
-    selector: &str,
-) -> Result<Vec<wl_output::WlOutput>> {
+fn select_outputs(output_state: &OutputState, selector: &str) -> Result<Vec<wl_output::WlOutput>> {
     let outputs: Vec<_> = output_state.outputs().collect();
 
     if outputs.is_empty() {
@@ -443,15 +447,14 @@ fn should_revive(stoplist: &[String]) -> bool {
 /// Replace this process with mpvpaper-rs using execv
 fn revive_mpvpaper_rs(args: &Args) -> Result<()> {
     // Get path to mpvpaper-rs binary
-    let exe_path = std::fs::read_link("/proc/self/exe")
-        .context("Failed to read /proc/self/exe")?;
+    let exe_path = std::fs::read_link("/proc/self/exe").context("Failed to read /proc/self/exe")?;
 
     // Derive mpvpaper-rs path from holder path
     // holder: /path/to/mpvpaper-rs-holder
     // main:   /path/to/mpvpaper-rs
-    let parent = exe_path.parent().ok_or_else(|| {
-        anyhow::anyhow!("Cannot determine parent directory of holder executable")
-    })?;
+    let parent = exe_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Cannot determine parent directory of holder executable"))?;
 
     let mpvpaper_rs_path = parent.join("mpvpaper-rs");
 
@@ -466,8 +469,8 @@ fn revive_mpvpaper_rs(args: &Args) -> Result<()> {
     let mut c_args: Vec<CString> = Vec::new();
 
     // argv[0] = program name
-    let prog_name = CString::new(mpvpaper_rs_path.as_os_str().as_bytes())
-        .context("Invalid program path")?;
+    let prog_name =
+        CString::new(mpvpaper_rs_path.as_os_str().as_bytes()).context("Invalid program path")?;
     c_args.push(prog_name);
 
     // Reconstruct original arguments
@@ -533,7 +536,11 @@ fn revive_mpvpaper_rs(args: &Args) -> Result<()> {
     cflp_info(
         2,
         args.verbose,
-        &format!("Executing: {} with {} args", mpvpaper_rs_path.display(), c_args.len()),
+        &format!(
+            "Executing: {} with {} args",
+            mpvpaper_rs_path.display(),
+            c_args.len()
+        ),
     );
 
     // execv replaces this process

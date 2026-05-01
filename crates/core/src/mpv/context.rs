@@ -6,8 +6,8 @@ use std::sync::Mutex;
 use calloop::channel::Sender;
 use libmpv2::Mpv;
 use libmpv2_sys::{
-    mpv_opengl_init_params, mpv_render_context, mpv_render_context_create,
-    mpv_render_context_free, mpv_render_context_set_update_callback, mpv_render_param,
+    mpv_opengl_init_params, mpv_render_context, mpv_render_context_create, mpv_render_context_free,
+    mpv_render_context_set_update_callback, mpv_render_param,
     mpv_render_param_type_MPV_RENDER_PARAM_ADVANCED_CONTROL,
     mpv_render_param_type_MPV_RENDER_PARAM_API_TYPE,
     mpv_render_param_type_MPV_RENDER_PARAM_INVALID,
@@ -148,7 +148,9 @@ impl MpvState {
         F: Fn(&CStr) -> *mut c_void + 'static,
     {
         if !self.render_ctx.is_null() {
-            return Err(AppError::Config("Render context already initialized".into()));
+            return Err(AppError::Config(
+                "Render context already initialized".into(),
+            ));
         }
 
         let init_data = self
@@ -216,14 +218,8 @@ impl MpvState {
     ///
     /// Returns format: "playlist_pos:time_pos"
     pub fn get_save_info(&self) -> Result<String> {
-        let playlist_pos: i64 = self
-            .mpv
-            .get_property("playlist-pos")
-            .unwrap_or(0);
-        let time_pos: f64 = self
-            .mpv
-            .get_property("time-pos")
-            .unwrap_or(0.0);
+        let playlist_pos: i64 = self.mpv.get_property("playlist-pos").unwrap_or(0);
+        let time_pos: f64 = self.mpv.get_property("time-pos").unwrap_or(0.0);
         Ok(format!("{}:{}", playlist_pos, time_pos))
     }
 
@@ -255,7 +251,6 @@ impl MpvState {
             .command("playlist-next", &["weak"])
             .map_err(AppError::Mpv)
     }
-
 }
 
 impl Drop for MpvState {

@@ -103,7 +103,10 @@ pub fn run_app(args: &Args) -> Result<()> {
 
     // Setup EGL surfaces for each output
     for display_output in app_state.outputs.values_mut() {
-        if display_output.layer_surface.is_some() && display_output.width > 0 && display_output.height > 0 {
+        if display_output.layer_surface.is_some()
+            && display_output.width > 0
+            && display_output.height > 0
+        {
             display_output.setup_egl(&egl_state, display_output.width, display_output.height)?;
             cflp_info(
                 2,
@@ -345,8 +348,8 @@ fn main_loop(
     signal_rx: Channel<()>,
     halt_info: Arc<HaltInfo>,
 ) -> Result<()> {
-    let mut event_loop: EventLoop<AppState> =
-        EventLoop::try_new().map_err(|e| AppError::Config(format!("Failed to create event loop: {}", e)))?;
+    let mut event_loop: EventLoop<AppState> = EventLoop::try_new()
+        .map_err(|e| AppError::Config(format!("Failed to create event loop: {}", e)))?;
     let loop_signal = event_loop.get_signal();
     let handle = event_loop.handle();
 
@@ -381,7 +384,9 @@ fn main_loop(
                     if output.egl_surface.is_some() {
                         if let Err(e) = render_frame(&mpv_for_render, &egl_for_render, output) {
                             cflp_error(&format!("Render error: {}", e));
-                            halt_for_render.stop_render_loop.store(true, Ordering::SeqCst);
+                            halt_for_render
+                                .stop_render_loop
+                                .store(true, Ordering::SeqCst);
                             signal_for_render.stop();
                             return;
                         }
@@ -410,7 +415,9 @@ fn main_loop(
                 // Signal received - stop the render loop and mark as signal exit
                 // This prevents transitioning to holder on SIGINT/SIGTERM
                 halt_for_signal.signal_exit.store(true, Ordering::SeqCst);
-                halt_for_signal.stop_render_loop.store(true, Ordering::SeqCst);
+                halt_for_signal
+                    .stop_render_loop
+                    .store(true, Ordering::SeqCst);
                 signal_for_signal.stop();
             }
         })
@@ -460,8 +467,8 @@ fn setup_signal_handlers(halt_info: Arc<HaltInfo>, signal_tx: Sender<()>) -> Res
     // Handle SIGINT and SIGTERM with signal-hook iterator
     let tx_clone = signal_tx.clone();
     std::thread::spawn(move || {
-        let mut signals = Signals::new([SIGINT, SIGTERM])
-            .expect("Failed to create signal iterator");
+        let mut signals =
+            Signals::new([SIGINT, SIGTERM]).expect("Failed to create signal iterator");
 
         // signals is an iterator - use &mut for iteration
         for signal in &mut signals {
@@ -481,7 +488,9 @@ fn setup_signal_handlers(halt_info: Arc<HaltInfo>, signal_tx: Sender<()>) -> Res
     ctrlc::set_handler(move || {
         // Mark as signal exit to prevent holder transition
         halt_for_ctrlc.signal_exit.store(true, Ordering::SeqCst);
-        halt_for_ctrlc.stop_render_loop.store(true, Ordering::SeqCst);
+        halt_for_ctrlc
+            .stop_render_loop
+            .store(true, Ordering::SeqCst);
         // Also try to send via channel
         let _ = signal_tx.send(());
     })

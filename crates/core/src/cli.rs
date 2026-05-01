@@ -167,13 +167,7 @@ mod tests {
 
     #[test]
     fn test_layer_arg() {
-        let args = Args::parse_from([
-            "mpvpaper-rs",
-            "-l",
-            "overlay",
-            "DP-2",
-            "/path/to/video.mp4",
-        ]);
+        let args = Args::parse_from(["mpvpaper-rs", "-l", "overlay", "DP-2", "/path/to/video.mp4"]);
         assert_eq!(args.layer, LayerArg::Overlay);
     }
 

@@ -4,7 +4,8 @@ use std::sync::atomic::Ordering;
 use libmpv2_sys::{
     mpv_opengl_fbo, mpv_render_context_render, mpv_render_context_update, mpv_render_param,
     mpv_render_param_type_MPV_RENDER_PARAM_FLIP_Y, mpv_render_param_type_MPV_RENDER_PARAM_INVALID,
-    mpv_render_param_type_MPV_RENDER_PARAM_OPENGL_FBO, mpv_render_update_flag_MPV_RENDER_UPDATE_FRAME,
+    mpv_render_param_type_MPV_RENDER_PARAM_OPENGL_FBO,
+    mpv_render_update_flag_MPV_RENDER_UPDATE_FRAME,
 };
 
 use crate::error::Result;
