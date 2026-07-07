@@ -434,7 +434,7 @@ dependencies = [
 
 [[package]]
 name = "mpvpaper-rs"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "calloop",
  "calloop-wayland-source",
@@ -449,7 +449,7 @@ dependencies = [
 
 [[package]]
 name = "mpvpaper-rs-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "calloop",
@@ -474,7 +474,7 @@ dependencies = [
 
 [[package]]
 name = "mpvpaper-rs-holder"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "clap",
