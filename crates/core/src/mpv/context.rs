@@ -1,7 +1,8 @@
+use std::collections::{HashSet, VecDeque};
 use std::ffi::{c_char, c_void, CStr};
 use std::ptr;
 use std::sync::atomic::AtomicU64;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 use calloop::channel::Sender;
 use libmpv2::Mpv;
@@ -24,6 +25,26 @@ use super::options::{
 
 /// Closure resolving an OpenGL function name to its address.
 type GetProcAddrFn = dyn Fn(&CStr) -> *mut c_void;
+
+type GlSync = *mut c_void;
+type GlFenceSyncFn = unsafe extern "system" fn(u32, u32) -> GlSync;
+type GlDeleteSyncFn = unsafe extern "system" fn(GlSync);
+
+const MAX_TRACKED_GL_SYNC_FENCES: usize = 4;
+
+#[derive(Default)]
+struct GlSyncFenceTracker {
+    fence_sync: Option<GlFenceSyncFn>,
+    delete_sync: Option<GlDeleteSyncFn>,
+    active: VecDeque<usize>,
+    force_deleted: HashSet<usize>,
+}
+
+static GL_SYNC_FENCE_TRACKER: OnceLock<Mutex<GlSyncFenceTracker>> = OnceLock::new();
+
+fn gl_sync_fence_tracker() -> &'static Mutex<GlSyncFenceTracker> {
+    GL_SYNC_FENCE_TRACKER.get_or_init(|| Mutex::new(GlSyncFenceTracker::default()))
+}
 
 /// MPV state with render context for OpenGL rendering
 ///
@@ -290,7 +311,104 @@ unsafe extern "C" fn gl_get_proc_address_wrapper(
 
     let get_proc_addr = &*(ctx as *const Box<GetProcAddrFn>);
     let name_cstr = CStr::from_ptr(name);
+    let name_bytes = name_cstr.to_bytes();
+
+    if name_bytes == b"glFenceSync" || name_bytes == b"FenceSync" {
+        let real = get_proc_addr(name_cstr);
+        if real.is_null() {
+            return ptr::null_mut();
+        }
+
+        let mut tracker = gl_sync_fence_tracker().lock().unwrap();
+        tracker.fence_sync = Some(std::mem::transmute::<*mut c_void, GlFenceSyncFn>(real));
+
+        let delete_name = c"glDeleteSync";
+        let delete_real = get_proc_addr(delete_name);
+        if !delete_real.is_null() {
+            tracker.delete_sync = Some(std::mem::transmute::<*mut c_void, GlDeleteSyncFn>(
+                delete_real,
+            ));
+        }
+
+        return tracked_gl_fence_sync as *mut c_void;
+    }
+
+    if name_bytes == b"glDeleteSync" || name_bytes == b"DeleteSync" {
+        let real = get_proc_addr(name_cstr);
+        if real.is_null() {
+            return ptr::null_mut();
+        }
+
+        let mut tracker = gl_sync_fence_tracker().lock().unwrap();
+        tracker.delete_sync = Some(std::mem::transmute::<*mut c_void, GlDeleteSyncFn>(real));
+
+        return tracked_gl_delete_sync as *mut c_void;
+    }
+
     get_proc_addr(name_cstr)
+}
+
+unsafe extern "system" fn tracked_gl_fence_sync(condition: u32, flags: u32) -> GlSync {
+    let real = {
+        let tracker = gl_sync_fence_tracker().lock().unwrap();
+        tracker.fence_sync
+    };
+    let Some(real) = real else {
+        return ptr::null_mut();
+    };
+
+    let sync = real(condition, flags);
+    if sync.is_null() {
+        return sync;
+    }
+
+    let (delete_sync, sync_to_delete) = {
+        let mut tracker = gl_sync_fence_tracker().lock().unwrap();
+        tracker.active.push_back(sync as usize);
+
+        let sync_to_delete = if tracker.active.len() > MAX_TRACKED_GL_SYNC_FENCES {
+            let old = tracker.active.pop_front();
+            if let Some(old) = old {
+                tracker.force_deleted.insert(old);
+            }
+            old
+        } else {
+            None
+        };
+
+        (tracker.delete_sync, sync_to_delete)
+    };
+
+    if let (Some(delete_sync), Some(sync_to_delete)) = (delete_sync, sync_to_delete) {
+        delete_sync(sync_to_delete as GlSync);
+    }
+
+    sync
+}
+
+unsafe extern "system" fn tracked_gl_delete_sync(sync: GlSync) {
+    if sync.is_null() {
+        return;
+    }
+
+    let (delete_sync, should_delete) = {
+        let mut tracker = gl_sync_fence_tracker().lock().unwrap();
+        let sync_id = sync as usize;
+
+        let was_active = tracker.active.iter().any(|id| *id == sync_id);
+        if was_active {
+            tracker.active.retain(|id| *id != sync_id);
+        }
+
+        let was_force_deleted = tracker.force_deleted.remove(&sync_id);
+        (tracker.delete_sync, was_active || !was_force_deleted)
+    };
+
+    if should_delete {
+        if let Some(delete_sync) = delete_sync {
+            delete_sync(sync);
+        }
+    }
 }
 
 /// Create MPV OpenGL render context using libmpv2-sys

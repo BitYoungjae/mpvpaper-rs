@@ -1,5 +1,6 @@
 [workspace]
 members = ["crates/mpvpaper-rs", "crates/holder", "crates/core"]
+exclude = ["third_party/wayland-scanner"]
 resolver = "2"
 
 [workspace.package]
@@ -15,41 +16,46 @@ description = "Video wallpaper player using mpv for wlroots-based Wayland compos
 mpvpaper-rs-core = { path = "crates/core" }
 
 # Wayland - SCTK 0.20 기반 최신 조합
-smithay-client-toolkit = { version = "0.20", default-features = false, features = ["calloop"] }
-wayland-client = "0.31"
-wayland-protocols = { version = "0.32.10", features = ["client"] }
-wayland-protocols-wlr = { version = "0.3", features = ["client"] }
-wayland-egl = "0.32.9"
+smithay-client-toolkit = { version = "0.20.0", default-features = false, features = ["calloop"] }
+wayland-client = "0.31.14"
+wayland-protocols = { version = "0.32.13", features = ["client"] }
+wayland-protocols-wlr = { version = "0.3.12", features = ["client"] }
+wayland-egl = "0.32.11"
 
 # Event loop
-calloop = "0.14"
+calloop = "0.14.4"
 # calloop-wayland-source 0.4는 calloop 0.14와 호환
 # 0.3은 calloop 0.13 기반이므로 0.4 사용
-calloop-wayland-source = "0.4"
+calloop-wayland-source = "0.4.1"
 
 # Graphics
-khronos-egl = { version = "6", features = ["dynamic"] }
-gl = "0.14"
-libloading = "0.8"
+khronos-egl = { version = "6.0.0", features = ["dynamic"] }
+gl = "0.14.0"
 
 # MPV
-libmpv2 = "5.0.3"
-libmpv2-sys = "4"
+libmpv2 = "6.0.0"
+libmpv2-sys = "4.0.1"
 
 # CLI
-clap = { version = "4", features = ["derive"] }
-dirs = "6"
-shlex = "1"
+clap = { version = "4.6.1", features = ["derive"] }
+dirs = "6.0.0"
+shlex = "2.0.1"
 
 # Threading
-nix = { version = "0.31.1", features = ["event", "poll", "signal", "process", "mman", "fs"] }
-dashmap = "6.1"
+nix = { version = "0.31.3", features = ["event", "poll", "signal", "process", "mman", "fs"] }
+dashmap = "6.2.1"
 
 # Logging
-colored = "2"
+colored = "3.1.1"
 
 # Error handling
-anyhow = "1"
-thiserror = "2"
-ctrlc = "3"
-signal-hook = { version = "0.3", features = ["iterator"] }
+anyhow = "1.0.103"
+thiserror = "2.0.18"
+ctrlc = "3.5.2"
+signal-hook = { version = "0.4.4", features = ["iterator"] }
+
+[patch.crates-io]
+# wayland-scanner 0.31.10 still depends on quick-xml 0.39, which is affected by
+# RUSTSEC-2026-0194 and RUSTSEC-2026-0195. Remove this patch once upstream
+# publishes a release depending on quick-xml >= 0.41.0.
+wayland-scanner = { path = "third_party/wayland-scanner" }

@@ -2,8 +2,9 @@ use std::ffi::c_void;
 use std::sync::atomic::Ordering;
 
 use libmpv2_sys::{
-    mpv_opengl_fbo, mpv_render_context_render, mpv_render_context_update, mpv_render_param,
-    mpv_render_param_type_MPV_RENDER_PARAM_FLIP_Y, mpv_render_param_type_MPV_RENDER_PARAM_INVALID,
+    mpv_opengl_fbo, mpv_render_context_render, mpv_render_context_report_swap,
+    mpv_render_context_update, mpv_render_param, mpv_render_param_type_MPV_RENDER_PARAM_FLIP_Y,
+    mpv_render_param_type_MPV_RENDER_PARAM_INVALID,
     mpv_render_param_type_MPV_RENDER_PARAM_OPENGL_FBO,
     mpv_render_update_flag_MPV_RENDER_UPDATE_FRAME,
 };
@@ -83,6 +84,17 @@ impl MpvState {
 
         Ok(())
     }
+
+    /// Tell libmpv that the rendered frame was presented.
+    pub fn report_swap(&self) {
+        if self.render_ctx.is_null() {
+            return;
+        }
+
+        unsafe {
+            mpv_render_context_report_swap(self.render_ctx);
+        }
+    }
 }
 
 /// Render a frame for a specific output
@@ -105,6 +117,7 @@ pub fn render_frame(
     let egl_surface = output.egl_surface.as_ref().ok_or_else(|| {
         crate::error::AppError::EglInit("EGL surface not available for rendering".into())
     })?;
+    let egl_surface = egl_surface.raw();
 
     // width/height are already the scaled buffer size from configure event
     let width = output.width;
@@ -123,6 +136,7 @@ pub fn render_frame(
 
     // Swap buffers
     egl_state.swap_buffers(egl_surface)?;
+    mpv_state.report_swap();
 
     // Mark that we've rendered
     output.redraw_needed = false;

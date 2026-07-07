@@ -127,7 +127,7 @@ pub fn run_app(args: &Args) -> Result<()> {
         .find_map(|o| o.egl_surface.as_ref())
         .ok_or_else(|| AppError::EglInit("No EGL surface available for MPV init".into()))?;
 
-    egl_state.make_current(first_surface)?;
+    egl_state.make_current(first_surface.raw())?;
 
     // Now initialize the MPV render context with active GL context
     let egl_for_mpv = Arc::clone(&egl_state);
@@ -174,7 +174,7 @@ pub fn run_app(args: &Args) -> Result<()> {
     // Run main event loop
     cflp_success("Starting event loop");
     let result = main_loop(
-        app_state,
+        &mut app_state,
         event_queue,
         Arc::clone(&egl_state),
         Arc::clone(&mpv_state),
@@ -186,14 +186,29 @@ pub fn run_app(args: &Args) -> Result<()> {
     // Shutdown threads
     thread_handles.shutdown_all(&halt_info);
 
-    // Check if we should exec holder
-    if halt_info.should_exec_holder() {
-        // Save playback position
+    let should_exec_holder = halt_info.should_exec_holder();
+    let save_info = if should_exec_holder {
+        // Save playback position while MPV is still alive.
         let save_info = mpv_state.get_save_info().ok();
         if let Some(ref info) = save_info {
             cflp_info(1, args.verbose, &format!("Saving position: {}", info));
         }
+        save_info
+    } else {
+        None
+    };
 
+    // CRITICAL: Explicit teardown order to prevent use-after-free:
+    // MPV render context -> EGL surfaces -> EGL context/display -> Wayland.
+    drop(mpv_state);
+    for output in app_state.outputs.values_mut() {
+        output.teardown_egl();
+    }
+    drop(egl_state);
+    drop(app_state);
+
+    // Check if we should exec holder
+    if should_exec_holder {
         // Exec holder to maintain layer surfaces
         if let Err(e) = exec_holder(args, save_info.as_deref()) {
             cflp_error(&format!("Failed to exec holder: {}", e));
@@ -334,13 +349,8 @@ fn exec_holder(args: &Args, save_info: Option<&str>) -> Result<()> {
 
 /// Main event loop using calloop
 ///
-/// CRITICAL: This function takes ownership of all state and ensures correct drop order:
-/// MPV render context → EGL surfaces/context → Wayland connection
-///
-/// The mpv_state and egl_state Arc clones passed to the render callback are moved
-/// into the closure, but we keep the original Arcs to drop them explicitly at the end.
 fn main_loop(
-    mut app_state: AppState,
+    app_state: &mut AppState,
     event_queue: EventQueue<AppState>,
     egl_state: Arc<EglState>,
     mpv_state: Arc<MpvState>,
@@ -432,27 +442,9 @@ fn main_loop(
     // bounded by this timeout (1s is acceptable for a holder switch).
     while !halt_info.stop_render_loop.load(Ordering::SeqCst) {
         event_loop
-            .dispatch(Duration::from_secs(1), &mut app_state)
+            .dispatch(Duration::from_secs(1), app_state)
             .map_err(|e| AppError::Config(format!("Event loop dispatch error: {}", e)))?;
     }
-
-    // CRITICAL: Explicit drop order to prevent use-after-free
-    // Drop order MUST be: MPV → EGL surfaces (in outputs) → EGL state → Wayland
-    //
-    // 1. Drop MPV render context first (uses EGL/GL context)
-    drop(mpv_state);
-
-    // 2. Drop EGL surfaces in outputs (each output has egl_surface, egl_window)
-    //    This is handled by DisplayOutput::drop() which clears surfaces first
-    for output in app_state.outputs.values_mut() {
-        output.egl_surface = None;
-        output.egl_window = None;
-    }
-
-    // 3. Drop EGL state (display, context)
-    drop(egl_state);
-
-    // 4. app_state (Wayland connection) drops automatically when function returns
 
     Ok(())
 }

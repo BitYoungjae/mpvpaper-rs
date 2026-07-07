@@ -21,7 +21,6 @@ calloop-wayland-source.workspace = true
 # Graphics
 khronos-egl.workspace = true
 gl.workspace = true
-libloading.workspace = true
 
 # MPV
 libmpv2.workspace = true

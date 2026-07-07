@@ -1,4 +1,5 @@
-use khronos_egl as egl;
+use std::sync::Arc;
+
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
 use smithay_client_toolkit::shell::wlr_layer::LayerSurface;
 use smithay_client_toolkit::shell::WaylandSurface;
@@ -7,7 +8,7 @@ use wayland_client::{Connection, Proxy, QueueHandle};
 use wayland_egl::WlEglSurface;
 
 use crate::error::{AppError, Result};
-use crate::render::egl::EglState;
+use crate::render::egl::{EglState, EglSurface};
 
 use super::state::AppState;
 
@@ -20,7 +21,7 @@ pub struct DisplayOutput {
 
     // Surfaces (None until configured)
     // Drop order matters: egl_surface -> egl_window -> layer_surface
-    pub egl_surface: Option<egl::Surface>,
+    pub egl_surface: Option<EglSurface>,
     pub egl_window: Option<WlEglSurface>,
     pub layer_surface: Option<LayerSurface>,
     pub surface: Option<wl_surface::WlSurface>,
@@ -51,14 +52,13 @@ impl DisplayOutput {
         }
     }
 
-    pub fn setup_egl(&mut self, egl_state: &EglState, width: u32, height: u32) -> Result<()> {
+    pub fn setup_egl(&mut self, egl_state: &Arc<EglState>, width: u32, height: u32) -> Result<()> {
+        self.teardown_egl();
+
         let layer_surface = self
             .layer_surface
             .as_ref()
             .ok_or_else(|| AppError::EglInit("Layer surface not available for EGL setup".into()))?;
-
-        self.egl_surface = None;
-        self.egl_window = None;
 
         // The width/height from configure are already the buffer size we need
         // No need to scale again - the compositor has already accounted for scale
@@ -74,9 +74,15 @@ impl DisplayOutput {
         let egl_surface = egl_state.create_surface(&egl_window)?;
 
         self.egl_window = Some(egl_window);
-        self.egl_surface = Some(egl_surface);
+        self.egl_surface = Some(EglSurface::new(egl_surface, Arc::clone(egl_state)));
 
         Ok(())
+    }
+
+    /// Drop EGL resources in dependency order.
+    pub fn teardown_egl(&mut self) {
+        self.egl_surface = None;
+        self.egl_window = None;
     }
 
     /// Resize the EGL window to match new dimensions
@@ -189,8 +195,7 @@ impl OutputHandler for AppState {
 
 impl Drop for DisplayOutput {
     fn drop(&mut self) {
-        self.egl_surface = None;
-        self.egl_window = None;
+        self.teardown_egl();
         self.layer_surface = None;
         self.surface = None;
     }

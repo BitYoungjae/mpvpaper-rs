@@ -1,12 +1,13 @@
 use std::ffi::c_void;
+use std::fmt;
+use std::sync::Arc;
 
 use khronos_egl as egl;
-use libloading::Library;
 use wayland_client::Connection;
 use wayland_egl::WlEglSurface;
 
 use crate::error::{AppError, Result};
-use crate::logging::cflp_success;
+use crate::logging::{cflp_error, cflp_success};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GlApiType {
@@ -15,11 +16,49 @@ pub enum GlApiType {
 }
 
 pub struct EglState {
-    pub instance: egl::Instance<egl::Dynamic<Library, egl::EGL1_5>>,
+    pub instance: egl::DynamicInstance<egl::EGL1_5>,
     pub display: egl::Display,
     pub config: egl::Config,
     pub context: egl::Context,
     pub api_type: GlApiType,
+}
+
+pub struct EglSurface {
+    surface: Option<egl::Surface>,
+    egl_state: Arc<EglState>,
+}
+
+impl EglSurface {
+    pub fn new(surface: egl::Surface, egl_state: Arc<EglState>) -> Self {
+        Self {
+            surface: Some(surface),
+            egl_state,
+        }
+    }
+
+    pub fn raw(&self) -> &egl::Surface {
+        self.surface
+            .as_ref()
+            .expect("EGL surface handle should be present until drop")
+    }
+}
+
+impl fmt::Debug for EglSurface {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EglSurface")
+            .field("surface", &self.surface)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Drop for EglSurface {
+    fn drop(&mut self) {
+        if let Some(surface) = self.surface.take() {
+            if let Err(e) = self.egl_state.destroy_surface(surface) {
+                cflp_error(&format!("Failed to destroy EGL surface: {e:?}"));
+            }
+        }
+    }
 }
 
 // SAFETY: EglState is only accessed from the main render thread (where the
@@ -40,15 +79,8 @@ impl EglState {
     pub fn new(conn: &Connection) -> Result<Self> {
         let wl_display = conn.backend().display_ptr() as *mut c_void;
 
-        let lib = unsafe { Library::new("libEGL.so.1") }
-            .map_err(|e| AppError::EglInit(format!("Failed to load libEGL.so.1: {e:?}")))?;
-
-        let egl14 = unsafe { egl::DynamicInstance::<egl::EGL1_4>::load_required_from(lib) }
-            .map_err(|e| AppError::EglInit(format!("Failed to load EGL 1.4: {e:?}")))?;
-
-        let instance = egl14
-            .try_cast_into::<egl::Dynamic<Library, egl::EGL1_5>>()
-            .map_err(|_| AppError::EglInit("EGL 1.5 not supported".into()))?;
+        let instance = unsafe { egl::DynamicInstance::<egl::EGL1_5>::load_required() }
+            .map_err(|e| AppError::EglInit(format!("Failed to load EGL 1.5: {e:?}")))?;
 
         let display = unsafe {
             instance
@@ -148,6 +180,33 @@ impl EglState {
         self.instance
             .swap_buffers(self.display, *surface)
             .map_err(|e| AppError::EglInit(format!("EGL swap_buffers failed: {e:?}")))
+    }
+
+    /// Destroy an EGL surface created by this state.
+    pub fn destroy_surface(&self, surface: egl::Surface) -> Result<()> {
+        self.instance
+            .destroy_surface(self.display, surface)
+            .map_err(|e| AppError::EglInit(format!("EGL destroy_surface failed: {e:?}")))
+    }
+}
+
+impl Drop for EglState {
+    fn drop(&mut self) {
+        if let Err(e) = self.instance.make_current(self.display, None, None, None) {
+            cflp_error(&format!("Failed to release current EGL context: {e:?}"));
+        }
+
+        if let Err(e) = self.instance.destroy_context(self.display, self.context) {
+            cflp_error(&format!("Failed to destroy EGL context: {e:?}"));
+        }
+
+        if let Err(e) = self.instance.terminate(self.display) {
+            cflp_error(&format!("Failed to terminate EGL display: {e:?}"));
+        }
+
+        if let Err(e) = self.instance.release_thread() {
+            cflp_error(&format!("Failed to release EGL thread state: {e:?}"));
+        }
     }
 }
 
