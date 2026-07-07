@@ -3,7 +3,6 @@ use std::fmt;
 use std::sync::Arc;
 
 use khronos_egl as egl;
-use libloading::Library;
 use wayland_client::Connection;
 use wayland_egl::WlEglSurface;
 
@@ -17,7 +16,7 @@ pub enum GlApiType {
 }
 
 pub struct EglState {
-    pub instance: egl::Instance<egl::Dynamic<Library, egl::EGL1_5>>,
+    pub instance: egl::DynamicInstance<egl::EGL1_5>,
     pub display: egl::Display,
     pub config: egl::Config,
     pub context: egl::Context,
@@ -80,15 +79,8 @@ impl EglState {
     pub fn new(conn: &Connection) -> Result<Self> {
         let wl_display = conn.backend().display_ptr() as *mut c_void;
 
-        let lib = unsafe { Library::new("libEGL.so.1") }
-            .map_err(|e| AppError::EglInit(format!("Failed to load libEGL.so.1: {e:?}")))?;
-
-        let egl14 = unsafe { egl::DynamicInstance::<egl::EGL1_4>::load_required_from(lib) }
-            .map_err(|e| AppError::EglInit(format!("Failed to load EGL 1.4: {e:?}")))?;
-
-        let instance = egl14
-            .try_cast_into::<egl::Dynamic<Library, egl::EGL1_5>>()
-            .map_err(|_| AppError::EglInit("EGL 1.5 not supported".into()))?;
+        let instance = unsafe { egl::DynamicInstance::<egl::EGL1_5>::load_required() }
+            .map_err(|e| AppError::EglInit(format!("Failed to load EGL 1.5: {e:?}")))?;
 
         let display = unsafe {
             instance
